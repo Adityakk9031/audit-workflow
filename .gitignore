@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment Variables & Secrets (Keep your DB credentials safe)
+.env
+.env.*
+!.env.example
+*.env
+
+# Build outputs
+dist/
+*/dist/
+build/
+*/build/
+
+# Uploads & Local DB data
+backend/data/
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+.vercel
