@@ -69,20 +69,22 @@ export default function DocumentDetailPage() {
   }
 
   function getFileUrl() {
-    if (!doc?.file_path) return null;
+    if (!doc?.file_path && !doc?.original_filename) return null;
     const token = localStorage.getItem('token');
     const base = import.meta.env.VITE_API_URL || '/api';
     return `${base}/documents/${doc.id}/file?token=${encodeURIComponent(token)}`;
   }
 
   const fileUrl = getFileUrl();
-  const isImage = doc?.file_path && (
-    doc.file_type?.startsWith('image/') ||
-    doc.file_path.match(/\.(png|jpe?g|webp)$/i)
+  const isImage = (
+    doc?.file_type?.startsWith('image/') ||
+    Boolean(doc?.file_path?.match(/\.(png|jpe?g|webp|gif|svg)$/i)) ||
+    Boolean(doc?.original_filename?.match(/\.(png|jpe?g|webp|gif|svg)$/i))
   );
-  const isPdf = doc?.file_path && (
-    doc.file_type === 'application/pdf' ||
-    doc.file_path.match(/\.pdf$/i)
+  const isPdf = (
+    doc?.file_type === 'application/pdf' ||
+    Boolean(doc?.file_path?.match(/\.pdf$/i)) ||
+    Boolean(doc?.original_filename?.match(/\.pdf$/i))
   );
 
   if (loading) {

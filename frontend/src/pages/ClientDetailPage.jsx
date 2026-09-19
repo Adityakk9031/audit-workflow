@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api';
 import Navbar from '../components/Navbar';
@@ -42,7 +42,9 @@ function AddDocumentModal({ clientId, onClose, onCreated }) {
       formData.append('client_id', clientId);
       formData.append('name', name.trim());
       formData.append('category', category);
-      if (file) formData.append('file', file);
+      if (file) {
+        formData.append('file', file);
+      }
 
       const { data } = await api.post('/documents', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -160,6 +162,7 @@ function AddDocumentModal({ clientId, onClose, onCreated }) {
 
 export default function ClientDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [client, setClient] = useState(null);
   const [documents, setDocs] = useState([]);
@@ -445,7 +448,7 @@ export default function ClientDetailPage() {
                     <tr
                       key={doc.id}
                       className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
-                      onClick={() => (window.location.href = `/documents/${doc.id}`)}
+                      onClick={() => navigate(`/documents/${doc.id}`)}
                     >
                       {/* Document Name */}
                       <td className="py-3.5 px-4 font-semibold text-slate-900">

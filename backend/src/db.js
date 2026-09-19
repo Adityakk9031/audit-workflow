@@ -102,6 +102,7 @@ async function initSchema() {
     ALTER TABLE documents ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
     ALTER TABLE documents ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General';
     ALTER TABLE documents ADD COLUMN IF NOT EXISTS review_comment TEXT;
+    ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_data BYTEA;
 
     ALTER TABLE clients ADD COLUMN IF NOT EXISTS financial_year TEXT DEFAULT 'FY 2025-26';
     ALTER TABLE clients ADD COLUMN IF NOT EXISTS gstin TEXT;

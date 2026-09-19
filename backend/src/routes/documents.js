@@ -36,11 +36,13 @@ const upload = multer({
   },
 });
 
-// ── Helper: get document with full join, firm-isolated ────────────────────────
+// ── Helper: get document metadata (excluding heavy file_data binary blob) ─────
 async function getDocumentForFirm(docId, firmId) {
   return db.queryOne(
     `SELECT
-       d.*,
+       d.id, d.firm_id, d.client_id, d.name, d.file_path, d.original_filename,
+       d.file_size, d.file_type, d.version, d.category, d.review_comment,
+       d.uploaded_by, d.status, d.created_at, d.updated_at,
        u.name AS uploaded_by_name,
        u.role AS uploaded_by_role,
        c.name AS client_name,
@@ -85,17 +87,18 @@ router.post(
       const originalName = req.file ? req.file.originalname : null;
       const fileSize = req.file ? req.file.size : null;
       const fileType = req.file ? req.file.mimetype : null;
+      const fileBuffer = req.file ? fs.readFileSync(req.file.path) : null;
       const status = req.file ? 'uploaded' : 'pending';
       const docCategory = category || 'General';
 
       await db.execute(
         `INSERT INTO documents (
            id, firm_id, client_id, name, file_path, original_filename,
-           file_size, file_type, version, category, uploaded_by, status
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9, $10, $11)`,
+           file_size, file_type, file_data, version, category, uploaded_by, status
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $11, $12)`,
         [
           docId, req.user.firmId, client_id, name.trim(), filePath,
-          originalName, fileSize, fileType, docCategory, req.user.id, status,
+          originalName, fileSize, fileType, fileBuffer, docCategory, req.user.id, status,
         ]
       );
 
@@ -130,21 +133,55 @@ router.get('/:id', async (req, res) => {
 });
 
 // ── GET /api/documents/:id/file — Serve file inline / download ────────────────
+// Serves directly from Neon PostgreSQL cloud storage (bytea), with local disk fallback.
+// This guarantees files persist and display seamlessly on Render, Vercel, or any host!
 router.get('/:id/file', async (req, res) => {
   try {
-    const doc = await getDocumentForFirm(req.params.id, req.user.firmId);
-    if (!doc) return res.status(404).json({ error: 'Document not found' });
-    if (!doc.file_path) return res.status(404).json({ error: 'No file uploaded yet' });
+    const doc = await db.queryOne(
+      `SELECT id, name, file_path, original_filename, file_type, file_data
+       FROM documents
+       WHERE id = $1 AND firm_id = $2`,
+      [req.params.id, req.user.firmId]
+    );
 
-    const filePath = path.join(UPLOADS_DIR, doc.file_path);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found on disk' });
-    }
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    if (!doc.file_path && !doc.file_data) return res.status(404).json({ error: 'No file uploaded yet' });
 
     const downloadName = doc.original_filename || doc.name;
+    const ext = path.extname(doc.original_filename || doc.file_path || '').toLowerCase();
+    const contentType = doc.file_type || {
+      '.pdf': 'application/pdf',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.xls': 'application/vnd.ms-excel',
+      '.csv': 'text/csv',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }[ext] || 'application/octet-stream';
+
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(downloadName)}"`);
-    res.sendFile(filePath);
+    res.setHeader('Content-Type', contentType);
+
+    // 1. Cloud storage (Neon PostgreSQL bytea) — Works across Render, Vercel, Localhost!
+    if (doc.file_data) {
+      return res.send(doc.file_data);
+    }
+
+    // 2. Fallback to local disk if file_data is not populated
+    if (doc.file_path) {
+      const filePath = path.join(UPLOADS_DIR, doc.file_path);
+      if (fs.existsSync(filePath)) {
+        return res.sendFile(filePath);
+      }
+    }
+
+    return res.status(404).json({ error: 'File not found on cloud database or disk' });
   } catch (err) {
+    console.error('File serving error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -167,6 +204,7 @@ router.post(
       const isReupload = doc.status === 'correction_required';
       const action = isReupload ? 'document_reuploaded' : 'document_uploaded';
       const newVersion = (doc.version || 1) + (isReupload ? 1 : 0);
+      const fileBuffer = fs.readFileSync(req.file.path);
 
       await db.execute(
         `UPDATE documents
@@ -175,17 +213,19 @@ router.post(
            original_filename = $2,
            file_size = $3,
            file_type = $4,
-           version = $5,
+           file_data = $5,
+           version = $6,
            status = 'uploaded',
-           uploaded_by = $6,
-           review_comment = $7,
+           uploaded_by = $7,
+           review_comment = $8,
            updated_at = NOW()
-         WHERE id = $8 AND firm_id = $9`,
+         WHERE id = $9 AND firm_id = $10`,
         [
           req.file.filename,
           req.file.originalname,
           req.file.size,
           req.file.mimetype,
+          fileBuffer,
           newVersion,
           req.user.id,
           isReupload ? 'Revised version uploaded by staff' : null,

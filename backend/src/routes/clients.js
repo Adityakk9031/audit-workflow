@@ -169,7 +169,11 @@ router.post('/:id/initialize-checklist', requireRole('admin', 'staff'), async (r
     }
 
     const documents = await db.query(
-      `SELECT d.*, u.name AS uploaded_by_name
+      `SELECT
+         d.id, d.firm_id, d.client_id, d.name, d.file_path, d.original_filename,
+         d.file_size, d.file_type, d.version, d.category, d.review_comment,
+         d.uploaded_by, d.status, d.created_at, d.updated_at,
+         u.name AS uploaded_by_name
        FROM documents d
        LEFT JOIN users u ON u.id = d.uploaded_by
        WHERE d.client_id = $1 AND d.firm_id = $2
@@ -194,7 +198,9 @@ router.get('/:id/documents', async (req, res) => {
 
     const documents = await db.query(
       `SELECT
-         d.*,
+         d.id, d.firm_id, d.client_id, d.name, d.file_path, d.original_filename,
+         d.file_size, d.file_type, d.version, d.category, d.review_comment,
+         d.uploaded_by, d.status, d.created_at, d.updated_at,
          u.name AS uploaded_by_name,
          u.role AS uploaded_by_role
        FROM documents d
