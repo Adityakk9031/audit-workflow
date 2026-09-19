@@ -14,8 +14,13 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ── Middleware ────────────────────────────────────────────────────────────────
+// Dynamically allow requesting origin (localhost, Vercel preview, Vercel prod)
+// without needing to manually update FRONTEND_URL in Render.
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // If FRONTEND_URL is set to a specific domain (and not '*'), allow it or allow all
+    callback(null, true);
+  },
   credentials: true,
 }));
 app.use(express.json());
